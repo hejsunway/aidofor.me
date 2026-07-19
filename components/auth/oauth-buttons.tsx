@@ -49,12 +49,18 @@ export function OAuthButtons({ nextPath }: OAuthButtonsProps) {
     try {
       const supabase = createClient();
       const next = safeInternalPath(nextPath, "/app");
+      // Always pin the OAuth bounce URL to the canonical apex
+      // (aidofor.me), never window.location.origin. This guarantees
+      // the redirect_uri registered with Supabase matches the URL the
+      // browser actually returns to, even if the user landed on the
+      // www subdomain or if Vercel's domain edge rewrites hosts.
+      const canonicalOrigin =
+        process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+        window.location.origin;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          // Force the OAuth bounce-back into AidoForMe, not the shared
-          // Site URL (which TutorPakar owns).
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+          redirectTo: `${canonicalOrigin}/auth/callback?next=${encodeURIComponent(next)}`,
           // Always show the Google account picker so a TutorPakar user
           // with multiple Google identities can pick the right one.
           queryParams: { prompt: "select_account" },
