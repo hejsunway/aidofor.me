@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">AidoFor.Me mark</title>
+  <desc id="desc">A blue gradient circular ring.</desc>
+  <defs>
+    <linearGradient id="aido-gradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0015D6"/>
+      <stop offset="1" stop-color="#0989FB"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="url(#aido-gradient)" stroke-width="9"/>
+</svg>

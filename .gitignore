@@ -1,0 +1,36 @@
+# dependencies
+/node_modules
+
+# Next.js
+/.next/
+/out/
+
+# production
+/build
+
+# local environment files
+.env*
+!.env.example
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# pnpm local cache (the lockfile remains tracked)
+/.pnpm-store/
+
+# local operating-system files
+.DS_Store
+
+# Editor / agent personal state (per-developer, not committed)
+.agents/
+.claude/
+.cursor/
+
+# VS Code: ignore the workspace cache, but commit shared MCP config
+.vscode/*
+!.vscode/mcp.json
+!.vscode/settings.json
+!.vscode/extensions.json

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-key
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:no-demo
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Start isolated Supabase services
+        run: pnpm supabase start -x edge-runtime,imgproxy,realtime,studio,vector
+      - name: Run database and RLS tests
+        run: pnpm supabase test db --local
+      - name: Export isolated Supabase test credentials
+        run: pnpm supabase status -o env | grep -E '^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)=' >> "$GITHUB_ENV"
+      - name: Run Phase 1 persistence and Storage integration
+        run: pnpm test:phase1
+      - name: Run Phase 2 atomic concurrency integration
+        run: pnpm test:phase2
+        env:
+          AIDO_ALLOW_LOCAL_DB_RESET: "1"
+      - name: Run database advisors
+        run: pnpm supabase db advisors --local --fail-on warn

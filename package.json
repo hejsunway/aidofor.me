@@ -1,0 +1,38 @@
+{
+  "name": "aidoforme",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:db": "supabase test db --local",
+    "test:phase1": "node scripts/test-phase-one-integration.mjs",
+    "test:phase1:staging": "node scripts/test-phase-one-staging.mjs",
+    "test:phase2": "node scripts/test-phase-two-concurrency.mjs",
+    "db:advisors": "supabase db advisors --local --fail-on warn",
+    "check:no-demo": "node scripts/check-no-demo-data.mjs",
+    "check": "pnpm check:no-demo && pnpm lint && pnpm typecheck && pnpm build"
+  },
+  "dependencies": {
+    "@fontsource/comfortaa": "^5.2.8",
+    "@supabase/ssr": "0.9.0",
+    "@supabase/supabase-js": "2.110.7",
+    "lucide-react": "^1.25.0",
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "stripe": "22.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^16.2.10",
+    "supabase": "2.109.1",
+    "typescript": "^5.9.3"
+  }
+}

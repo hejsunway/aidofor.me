@@ -1,0 +1,111 @@
+# For detailed configuration reference documentation, visit:
+# https://supabase.com/docs/guides/local-development/cli/config
+# This config.toml mirrors ONLY the auth settings that matter for the
+# shared TutorPakar project. It does not change the production project's
+# Site URL (which TutorPakar still depends on). Use this file as the
+# source of truth for `supabase db push` and `supabase db pull` from
+# this repo. Local dev defaults are kept; production overrides are
+# documented in docs/shared-auth-setup.md.
+
+project_id = "aidoforme"
+
+[api]
+enabled = true
+port = 55321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 55322
+shadow_port = 55320
+health_timeout = "2m"
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 55329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[db.migrations]
+enabled = true
+schema_paths = ["declarative"]
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 55323
+api_url = "http://127.0.0.1"
+
+[local_smtp]
+enabled = true
+port = 55324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[storage.s3_protocol]
+enabled = true
+
+[storage.vector]
+enabled = false
+max_buckets = 10
+max_indexes = 5
+
+[auth]
+enabled = true
+# Production Site URL must remain pointing at TutorPakar — DO NOT change
+# it in the live project. The Additional Redirect URLs (set in the
+# Supabase Dashboard) are what make AidoForMe auth work.
+site_url = "https://aidofor.me"
+# Exact URLs allowed for redirects. The first six are required for the
+# AidoForMe auth slice. The dev/preview entries let local + Vercel
+# preview deployments exchange PKCE codes and recovery links.
+additional_redirect_urls = [
+  "https://aidofor.me/auth/callback",
+  "https://aidofor.me/reset-password",
+  "https://aidofor.me/login",
+  "https://aidofor.me/signup",
+  "https://aidofor.me/app",
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3000/reset-password",
+  "http://localhost:3000/login",
+  "http://localhost:3000/signup",
+  "http://localhost:3000/app",
+  "https://*-aidoforme.vercel.app/auth/callback",
+  "https://*-aidoforme.vercel.app/reset-password",
+  "https://*-aidoforme.vercel.app/login",
+  "https://*-aidoforme.vercel.app/signup",
+  "https://*-aidoforme.vercel.app/app",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 8
+password_requirements = "lower_upper_letters_digits"
+
+[auth.rate_limit]
+email_sent = 2
+sms_sent = 30
+anonymous_users = 30
+token_refresh = 150
+sign_in_sign_ups = 30
+token_verifications = 30
+web3 = 30
+
+[edge_runtime]
+enabled = true
+inspector_port = 8183
+
+[analytics]
+enabled = false
+port = 55327
+backend = "postgres"
