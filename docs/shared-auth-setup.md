@@ -68,7 +68,7 @@ production, local dev):
 | `NEXT_PUBLIC_SUPABASE_URL` | yes | Same value as TutorPakar. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | recommended | New `sb_publishable_…` key if Supabase has issued one for this project. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | fallback | Legacy JWT anon key. Read only when the publishable key is unset. |
-| `NEXT_PUBLIC_SITE_URL` | yes | `https://aidofor.me` in production. |
+| `NEXT_PUBLIC_SITE_URL` | yes | `https://www.aidofor.me` in production. Must match what's registered with Supabase as `site_url`, since OAuth + recovery codes are bound to that URL. |
 
 **Never** add a `NEXT_PUBLIC_*` service-role key. The browser would
 ship it to every visitor. Service-role operations (if ever needed)
@@ -77,13 +77,23 @@ must run in a server-only context with a non-public env var.
 ## Manual Supabase Dashboard checklist (user must complete)
 
 1. **Authentication → URL Configuration → Site URL**
-   - Leave this **as-is** (currently set for TutorPakar). Changing it
-     breaks TutorPakar email links.
+   - `https://www.aidofor.me` for the AidoForMe slice. This must match
+     `NEXT_PUBLIC_SITE_URL` exactly — OAuth PKCE codes and email-recovery
+     links are bound to the registered URL and the code exchange will fail
+     with `Invalid grant` if there is a mismatch.
 
 2. **Authentication → URL Configuration → Additional Redirect URLs** —
-   add every line that applies to your environment:
+   add every line that applies to your environment. Both `www` (canonical,
+   what Vercel serves) and the apex (direct visits) are registered so the
+   PKCE exchange succeeds regardless of which host the browser lands on
+   after a Google/email round-trip:
 
    ```
+   https://www.aidofor.me/auth/callback
+   https://www.aidofor.me/reset-password
+   https://www.aidofor.me/login
+   https://www.aidofor.me/signup
+   https://www.aidofor.me/app
    https://aidofor.me/auth/callback
    https://aidofor.me/reset-password
    https://aidofor.me/login
@@ -149,9 +159,10 @@ For every Vercel environment (production + each preview):
 - `NEXT_PUBLIC_SUPABASE_URL` = the TutorPakar production URL
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = (preferred) or
   `NEXT_PUBLIC_SUPABASE_ANON_KEY` = (legacy)
-- `NEXT_PUBLIC_SITE_URL` = `https://aidofor.me` for production,
+- `NEXT_PUBLIC_SITE_URL` = `https://www.aidofor.me` for production,
   `http://localhost:3000` for local, or the `*.vercel.app` URL for
-  previews.
+  previews. **Must match the Supabase Site URL** or OAuth PKCE codes
+  will be rejected with `Invalid grant`.
 
 ## Verifying the slice locally
 

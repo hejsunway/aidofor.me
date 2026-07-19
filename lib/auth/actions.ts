@@ -18,7 +18,10 @@ import { ensureAidoMembership } from "@/lib/auth/membership";
 function siteOrigin(): string {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
-  return "https://aidofor.me";
+  // www.aidofor.me is canonical because Vercel Domains redirects the apex
+  // (aidofor.me) → www. All Supabase redirect_uris and OAuth codes are
+  // bound to www, so the fallback must match.
+  return "https://www.aidofor.me";
 }
 
 function callbackUrl(path: string): string {

@@ -59,14 +59,20 @@ max_indexes = 5
 
 [auth]
 enabled = true
-# Production Site URL must remain pointing at TutorPakar — DO NOT change
-# it in the live project. The Additional Redirect URLs (set in the
-# Supabase Dashboard) are what make AidoForMe auth work.
-site_url = "https://aidofor.me"
-# Exact URLs allowed for redirects. The first six are required for the
-# AidoForMe auth slice. The dev/preview entries let local + Vercel
-# preview deployments exchange PKCE codes and recovery links.
+# Production Site URL. www.aidofor.me is canonical because Vercel Domains
+# redirects the apex (aidofor.me) → www; OAuth codes are bound to whichever
+# URL is registered here, so it must match what Vercel serves.
+site_url = "https://www.aidofor.me"
+# Exact URLs allowed for redirects. Both www (canonical, what Vercel
+# serves) and the apex (direct visits that bypass Vercel's edge redirect)
+# are registered so the PKCE code exchange succeeds regardless of which
+# hostname the browser lands on after Google/email round-trips.
 additional_redirect_urls = [
+  "https://www.aidofor.me/auth/callback",
+  "https://www.aidofor.me/reset-password",
+  "https://www.aidofor.me/login",
+  "https://www.aidofor.me/signup",
+  "https://www.aidofor.me/app",
   "https://aidofor.me/auth/callback",
   "https://aidofor.me/reset-password",
   "https://aidofor.me/login",

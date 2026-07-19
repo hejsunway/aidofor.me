@@ -5,8 +5,9 @@ import "./globals.css";
 
 // Treat empty strings from misconfigured env as missing so the
 // fallback URL is always a valid absolute URL during build.
+// www.aidofor.me is canonical because Vercel redirects apex → www.
 const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://aidofor.me";
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://www.aidofor.me";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

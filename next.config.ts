@@ -3,9 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  // Canonical host is the apex (aidofor.me). www.aidofor.me → aidofor.me
-  // is handled by Vercel's domain "Redirect to apex" setting; declaring it
-  // here too would loop with Vercel's edge redirect.
+  // Canonical host is www.aidofor.me. The Vercel Domains edge handles
+  // apex (aidofor.me) → www.aidofor.me automatically; we keep the
+  // project config empty so Next.js doesn't fight Vercel's redirect.
   async redirects() {
     return [];
   },
