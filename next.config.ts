@@ -3,15 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  // Canonical host is the apex (aidofor.me). www.aidofor.me → aidofor.me
+  // is handled by Vercel's domain "Redirect to apex" setting; declaring it
+  // here too would loop with Vercel's edge redirect.
   async redirects() {
-    return [
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "www.aidofor.me" }],
-        destination: "https://aidofor.me/:path*",
-        permanent: true,
-      },
-    ];
+    return [];
   },
   async headers() {
     return [
