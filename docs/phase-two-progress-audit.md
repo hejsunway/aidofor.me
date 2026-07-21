@@ -42,7 +42,7 @@
 | Verified, idempotent Stripe grants | Raw-signature route and atomic event functions | Code complete; external Stripe test-mode evidence missing |
 | Real balance, history, subscription, and top-up interfaces | Real wallet/history, Checkout, lifecycle projection, and configured portal action | Code complete; external Stripe test-mode evidence missing |
 | Plan/user/concurrency/provider controls and kill switches | Rate cards, system controls, provider budget authorization | Complete locally |
-| Server-only gateway with hard ceilings | OpenAI, DeepSeek, and MiniMax adapters; database authorization plus single-dispatch claim | Complete locally; latest retry passed automatic anchoring but failed human semantic quality review |
+| Server-only gateway with hard ceilings | OpenAI, DeepSeek, and MiniMax adapters; database authorization plus single-dispatch claim | Complete locally; the single approved v13 mini request failed one automatic source-coverage/output consistency check |
 | Provider-reported usage and actual-cost capture | Separate ordinary/cache-read/cache-write token fields, tool/search/latency/request fields, database-recomputed cost, settlement, and provider-invoice comparison | Code and staging schema complete; first real gateway event and provider export/invoice evidence missing |
 | Approved lower-cost routing | Versioned approved route table and fail-closed lookup | Mechanism complete; reviewed staging draft remains disabled because quality gate failed |
 | Automated financial and provider-invoice reconciliation | Durable daily runner, Stripe comparison, immutable hashed invoice import, internal mismatch functions, and completed manual staging run `9d55511f-f8cc-4387-912e-c3d415611366` | Routes and persistence verified on staging; scheduler-originated run, first real invoice, and Stripe lifecycle still missing |
@@ -57,6 +57,8 @@ supabase test db --local                   202/202 pass
 pnpm test:phase2                           concurrent duplicate/overspend pass
 pnpm test:billing-config                   environment/project boundary pass
 pnpm test:providers                        OpenAI/DeepSeek/MiniMax contracts pass
+pnpm phase2:evaluate-provider --self-test  v14 source/requirement binding guards pass; no provider request
+v14 isolated-staging evaluator dry run     35 anchors / 27 coverage rows / 5 clauses; no provider request
 pnpm phase2:verify-cron-staging            deployed 401/200 and persisted-run checks pass
 supabase db advisors --local --fail-on warn no issues
 supabase db push --linked --dry-run         exactly one staging migration
@@ -173,17 +175,27 @@ The concurrency test makes two simultaneous identical reservations and proves on
   truncated OCR block, emits no atomic clause from it, prohibits that block
   from all semantic extraction, and permits only one fixed neutral ambiguity.
   Regression tests reject merged or omitted clauses and any guessed completion.
-  The v13 isolated-staging dry run passes with no provider request. A private
-  version-bound 17-item checklist now exists outside Git with mode `0600` and
-  SHA-256
-  `3ee2e0dc9d71b53cc3c190aed861cfc7ca090ac10bb151a637715c105d4d1324`,
-  but its exact-scope `provider_request_approval` remains `false`. V13 is not
-  provider quality evidence until that checklist is reviewed and the one paid
-  request is explicitly approved.
-  The evaluator now also requires an explicit private
-  `provider_request_approval` block bound to the exact staging project, model,
-  prompt, schema, anchoring version, and document hashes before any paid
-  provider request can run.
+  The v13 isolated-staging dry run passed with no provider request. The owner
+  then reviewed checklist SHA-256
+  `3ee2e0dc9d71b53cc3c190aed861cfc7ca090ac10bb151a637715c105d4d1324`
+  and approved exactly one mini request with no retry, no fallback, and a USD
+  0.048 cap. It completed as
+  `resp_04f69099eeeb93be016a5fcce9cfe48199b3f26bb488957481` in 13,186 ms,
+  using 8,111 input and 2,426 output tokens for an estimated USD 0.017001. The
+  pre-dispatch conservative ceiling was USD 0.047172. All schema, anchor,
+  atomic-clause, uniqueness, incomplete-text, and truncation guards passed,
+  but one of 27 coverage receipts classified a block as an assignment
+  requirement without any returned requirement citing it. Automatic
+  validation failed, human review was blocked, and no retry or fallback was
+  made. Offline v14 now requires each requirement-classified receipt to name a
+  real returned requirement that cites the same anchor, while every other
+  receipt must name `null`. Its regression suite and isolated-staging dry run
+  pass without a provider request. Paid v14 execution is deliberately locked
+  until a new version-bound checklist is reviewed and separately approved.
+  The evaluator requires an explicit private `provider_request_approval` block
+  bound to the exact staging project, model, prompt, schema, anchoring version,
+  document hashes, cost ceiling, retry policy, and fallback policy before any
+  paid provider request can run.
   The cache-write accounting defect is now closed in code and on isolated
   staging. Because the provider quality gate still failed, both routes and all
   controls remain disabled and unapplied.

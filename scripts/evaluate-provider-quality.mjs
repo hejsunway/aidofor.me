@@ -13,13 +13,17 @@ const STAGING_SUPABASE_URL = `https://${STAGING_PROJECT_REF}.supabase.co`;
 const MODEL = "gpt-5.4-mini-2026-03-17";
 const FALLBACK_MODEL = null;
 const REASONING_EFFORT = "none";
-const PROMPT_VERSION = "phase2-requirement-extraction-v13-atomic-no-truncated-completion";
-const SCHEMA_VERSION = "aido.requirement-extraction.v10";
+const PROMPT_VERSION = "phase2-requirement-extraction-v14-source-requirement-binding";
+const SCHEMA_VERSION = "aido.requirement-extraction.v11";
 const INPUT_MICROUSD_PER_MILLION_TOKENS = 750_000;
 const CACHED_INPUT_MICROUSD_PER_MILLION_TOKENS = 75_000;
 const CACHE_WRITE_MICROUSD_PER_MILLION_TOKENS = 750_000;
 const OUTPUT_MICROUSD_PER_MILLION_TOKENS = 4_500_000;
 const MAX_OUTPUT_TOKENS = 4_000;
+const MAX_PROVIDER_COST_MICROUSD = 48_000;
+// No v14 provider request is approved. Set this only after the owner reviews
+// and explicitly approves a checklist bound to this exact prompt/schema pair.
+const APPROVED_CHECKLIST_REVIEW_SHA256 = null;
 const TIMEOUT_MS = 120_000;
 const MAX_BLOCK_CHARS = 1_200;
 const MAX_ANCHORED_TEXT_CHARS = 120_000;
@@ -70,6 +74,11 @@ function checklistHasProviderRequestApproval(checklist, projectId) {
     && typeof approval?.reviewer === "string"
     && approval.reviewer.trim().length >= 2
     && Number.isFinite(Date.parse(approval?.reviewed_at ?? ""))
+    && typeof APPROVED_CHECKLIST_REVIEW_SHA256 === "string"
+    && approval?.reviewed_checklist_sha256 === APPROVED_CHECKLIST_REVIEW_SHA256
+    && approval?.maximum_provider_cost_microusd === MAX_PROVIDER_COST_MICROUSD
+    && approval?.retry_allowed === false
+    && approval?.fallback_model === FALLBACK_MODEL
     && scope?.target_environment === "staging"
     && scope?.staging_project_ref === STAGING_PROJECT_REF
     && scope?.project_id === projectId
@@ -118,6 +127,7 @@ async function loadReviewChecklist(checklistPath, project, documents, repository
     path: resolvedPath,
     version: checklist.checklist_version,
     sha256: createHash("sha256").update(bytes).digest("hex"),
+    reviewed_sha256: checklist.provider_request_approval.reviewed_checklist_sha256,
     approved_for_provider_request: true,
     reviewed_at: checklist.provider_request_approval.reviewed_at,
     approval_scope: approvalScope,
@@ -614,7 +624,7 @@ function metadataFieldSchema(valueType) {
 const coverageDecisionSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["classification", "has_incomplete_text", "notes"],
+  required: ["classification", "requirement_id", "has_incomplete_text", "notes"],
   properties: {
     classification: {
       type: "string",
@@ -623,6 +633,7 @@ const coverageDecisionSchema = {
         "integrity_policy", "ambiguity", "context_only", "unusable_or_incomplete",
       ],
     },
+    requirement_id: { type: ["string", "null"], minLength: 1, maxLength: 80 },
     has_incomplete_text: { type: "boolean" },
     notes: { type: "string", maxLength: 300 },
   },
@@ -633,9 +644,10 @@ function coverageDecisionSchemaForBlock(block) {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["classification", "has_incomplete_text", "notes"],
+    required: ["classification", "requirement_id", "has_incomplete_text", "notes"],
     properties: {
       classification: { type: "string", enum: ["unusable_or_incomplete"] },
+      requirement_id: { type: ["null"], enum: [null] },
       has_incomplete_text: { type: "boolean", enum: [true] },
       notes: { type: "string", enum: [INCOMPLETE_SOURCE_COVERAGE_NOTE] },
     },
@@ -859,7 +871,9 @@ function canonicalizeSourceCoverage(extraction) {
     }
     if (
       previous.classification === row.classification
+      && previous.requirement_id === row.requirement_id
       && previous.has_incomplete_text === row.has_incomplete_text
+      && previous.notes === row.notes
     ) {
       deduplicated += 1;
       continue;
@@ -985,6 +999,7 @@ function validateExtraction(
         schema_mismatch: 1,
         source_coverage_mismatch: 0,
         source_coverage_output_mismatch: 0,
+        source_coverage_requirement_binding_mismatch: 0,
         atomic_clause_coverage_mismatch: 0,
         atomic_clause_receipt_mismatch: 0,
         atomic_clause_nonunique_requirement: 0,
@@ -1087,6 +1102,17 @@ function validateExtraction(
         || row.classification === "unusable_or_incomplete"
       ) return requirementAnchorIds.has(anchorId);
       return false;
+    }).length,
+    source_coverage_requirement_binding_mismatch: requiredCoverageIds.filter((anchorId) => {
+      const row = coverageById.get(anchorId);
+      if (!row) return false;
+      const requiresRequirement = row.classification === "assignment_requirement"
+        || row.classification === "rubric_requirement";
+      if (!requiresRequirement) return row.requirement_id !== null;
+      if (typeof row.requirement_id !== "string" || !row.requirement_id) return true;
+      const requirement = requirementsById.get(row.requirement_id);
+      return !requirement
+        || !requirement.source_anchors.some((anchor) => anchor.anchor_id === anchorId);
     }).length,
     atomic_clause_coverage_mismatch: (
       clauseRows.length !== clauses.length
@@ -1246,6 +1272,31 @@ function calculateCostMicrousd(usage) {
   ) / 1_000_000);
 }
 
+function approvedCostEnvelope(requestBody) {
+  const requestBodyBytes = Buffer.byteLength(JSON.stringify(requestBody), "utf8");
+  const maximumInputRate = Math.max(
+    INPUT_MICROUSD_PER_MILLION_TOKENS,
+    CACHED_INPUT_MICROUSD_PER_MILLION_TOKENS,
+    CACHE_WRITE_MICROUSD_PER_MILLION_TOKENS,
+  );
+  // Every input token represents at least one source byte. Counting the entire
+  // serialized request body therefore overstates, rather than understates, the
+  // model-visible input-token ceiling because it also includes transport keys.
+  const maximumInputCostMicrousd = Math.ceil(
+    requestBodyBytes * maximumInputRate / 1_000_000,
+  );
+  const maximumOutputCostMicrousd = Math.ceil(
+    MAX_OUTPUT_TOKENS * OUTPUT_MICROUSD_PER_MILLION_TOKENS / 1_000_000,
+  );
+  return {
+    request_body_bytes_upper_bound: requestBodyBytes,
+    maximum_input_cost_microusd: maximumInputCostMicrousd,
+    maximum_output_cost_microusd: maximumOutputCostMicrousd,
+    maximum_provider_cost_microusd:
+      maximumInputCostMicrousd + maximumOutputCostMicrousd,
+  };
+}
+
 function publicSummaryFromReport(report) {
   return {
     completed: true,
@@ -1260,6 +1311,7 @@ function publicSummaryFromReport(report) {
     model_requested: report.model_requested,
     model_returned: report.model_returned,
     fallback_model: report.fallback_model ?? null,
+    automatic_retry_enabled: report.automatic_retry_enabled ?? null,
     reasoning_effort: report.reasoning_effort ?? null,
     response_id: report.response_id,
     prompt_version: report.prompt_version,
@@ -1285,6 +1337,10 @@ function publicSummaryFromReport(report) {
     cache_write_input_tokens: report.usage.cache_write_input_tokens ?? 0,
     output_tokens: report.usage.output_tokens,
     estimated_cost_microusd: report.usage.estimated_cost_microusd,
+    approved_max_provider_cost_microusd:
+      report.approved_max_provider_cost_microusd ?? null,
+    predispatch_max_provider_cost_microusd:
+      report.predispatch_cost_envelope?.maximum_provider_cost_microusd ?? null,
     automatic_validation_passed: report.automatic_validation.passed,
     automatic_validation_issues: report.automatic_validation.issues,
     requirement_count: report.automatic_validation.requirement_count,
@@ -1536,15 +1592,7 @@ async function runEvaluation(apiKey, project, documents, blocks, anchoredText, c
       ...documents.map((document) => document.content_hash),
     ].join(":"))
     .digest("hex");
-  const startedAt = Date.now();
-  const response = await fetch(OPENAI_RESPONSES_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
-    },
-    body: JSON.stringify({
+  const requestBody = {
       model: MODEL,
       reasoning: { effort: REASONING_EFFORT },
       store: false,
@@ -1553,12 +1601,13 @@ async function runEvaluation(apiKey, project, documents, blocks, anchoredText, c
         "Extract only explicit assignment and rubric requirements from the anchored source blocks.",
         "The source_coverage object has one required property per anchor. Classify every property exactly once; this is a structurally complete receipt, not optional commentary.",
         "Give every requirement a unique requirement_id and never reuse an ID.",
+        "For every source_coverage block classified as assignment_requirement or rubric_requirement, set requirement_id to the unique ID of a returned requirement that cites that exact anchor. For every other classification, requirement_id must be null.",
         "A structural_hint, locally_incomplete_text flag, and atomic_action_clauses list are deterministic parser signals; the quoted atomic clause text is copied verbatim from its source block.",
         "Every candidate_student_action block describes a numbered, student-directed assessed action and must be classified as assignment_requirement and cited by at least one returned requirement.",
         "The atomic_clause_coverage object has one required property per complete atomic action clause. Copy its supplied source_text and source_text_sha256 exactly.",
         "Map every atomic clause to its own unique returned requirement_id. Never map two clauses to one requirement and never merge clauses.",
         "The mapped requirement must cite only the clause's source block, and its requirement field must equal the complete atomic clause verbatim. Every command verb, deliverable, or constraint must also be a visible contiguous span within that clause.",
-        "Every source_coverage block classified as assignment_requirement or rubric_requirement must be cited by at least one returned requirement.",
+        "Every source_coverage block classified as assignment_requirement or rubric_requirement must be cited by its named returned requirement; classification alone never proves extraction completeness.",
         "Never cite a context_only or unusable_or_incomplete block as an assignment requirement.",
         `Mark has_incomplete_text true whenever locally_incomplete_text is true or visible source text is truncated, corrupted, or ends mid-phrase. Its source_coverage notes value must be exactly ${JSON.stringify(INCOMPLETE_SOURCE_COVERAGE_NOTE)}.`,
         `Every incomplete block must be classified unusable_or_incomplete and cited by exactly one ambiguity with severity important, issue ${JSON.stringify(INCOMPLETE_SOURCE_ISSUE)}, and question_for_lecturer ${JSON.stringify(INCOMPLETE_SOURCE_QUESTION)}. That ambiguity must cite only the incomplete block.`,
@@ -1598,7 +1647,22 @@ async function runEvaluation(apiKey, project, documents, blocks, anchoredText, c
           schema: extractionSchema,
         },
       },
-    }),
+  };
+  const costEnvelope = approvedCostEnvelope(requestBody);
+  if (costEnvelope.maximum_provider_cost_microusd > MAX_PROVIDER_COST_MICROUSD) {
+    throw new Error(
+      `The pre-dispatch provider-cost ceiling is ${costEnvelope.maximum_provider_cost_microusd} microusd; approved maximum is ${MAX_PROVIDER_COST_MICROUSD} microusd.`,
+    );
+  }
+  const startedAt = Date.now();
+  const response = await fetch(OPENAI_RESPONSES_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(requestBody),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   const latencyMs = Date.now() - startedAt;
@@ -1649,6 +1713,7 @@ async function runEvaluation(apiKey, project, documents, blocks, anchoredText, c
       model_requested: MODEL,
       model_returned: payload.model ?? null,
       fallback_model: FALLBACK_MODEL,
+      automatic_retry_enabled: false,
       reasoning_effort: REASONING_EFFORT,
       response_id: payload.id ?? null,
       prompt_version: PROMPT_VERSION,
@@ -1656,6 +1721,7 @@ async function runEvaluation(apiKey, project, documents, blocks, anchoredText, c
       human_checklist_reference: {
         version: checklistReference.version,
         sha256: checklistReference.sha256,
+        reviewed_sha256: checklistReference.reviewed_sha256,
       },
       store: false,
       tools_enabled: false,
@@ -1680,6 +1746,8 @@ async function runEvaluation(apiKey, project, documents, blocks, anchoredText, c
       ),
       anchored_text_sha256: createHash("sha256").update(anchoredText).digest("hex"),
       max_output_tokens: MAX_OUTPUT_TOKENS,
+      approved_max_provider_cost_microusd: MAX_PROVIDER_COST_MICROUSD,
+      predispatch_cost_envelope: costEnvelope,
       latency_ms: latencyMs,
       usage: {
         input_tokens: Number(usage.input_tokens ?? 0),
@@ -1734,6 +1802,10 @@ function runEvaluatorContractSelfTest() {
   if (calculatedCost !== 1_132_500) {
     throw new Error("The model price-accounting self-test failed.");
   }
+  const oversizedCostEnvelope = approvedCostEnvelope({ input: "x".repeat(100_000) });
+  if (oversizedCostEnvelope.maximum_provider_cost_microusd <= MAX_PROVIDER_COST_MICROUSD) {
+    throw new Error("The provider-cost ceiling self-test failed.");
+  }
 
   const document = {
     id: "00000000-0000-4000-8000-000000000001",
@@ -1746,6 +1818,10 @@ function runEvaluatorContractSelfTest() {
       approved_for_provider_request: true,
       reviewer: "Phase 2 reviewer",
       reviewed_at: "2026-07-20T00:00:00.000Z",
+      reviewed_checklist_sha256: APPROVED_CHECKLIST_REVIEW_SHA256,
+      maximum_provider_cost_microusd: MAX_PROVIDER_COST_MICROUSD,
+      retry_allowed: false,
+      fallback_model: FALLBACK_MODEL,
       scope: {
         target_environment: "staging",
         staging_project_ref: STAGING_PROJECT_REF,
@@ -1757,9 +1833,11 @@ function runEvaluatorContractSelfTest() {
       },
     },
   };
-  if (!checklistHasProviderRequestApproval(approvalChecklist, document.id)) {
-    throw new Error("The provider-request approval checklist self-test failed.");
-  }
+  const approvalAccepted = checklistHasProviderRequestApproval(approvalChecklist, document.id);
+  if (
+    (typeof APPROVED_CHECKLIST_REVIEW_SHA256 === "string" && !approvalAccepted)
+    || (APPROVED_CHECKLIST_REVIEW_SHA256 === null && approvalAccepted)
+  ) throw new Error("The provider-request approval checklist self-test failed.");
   const unapprovedChecklist = structuredClone(approvalChecklist);
   unapprovedChecklist.provider_request_approval.scope.prompt_version = "previous-prompt";
   if (checklistHasProviderRequestApproval(unapprovedChecklist, document.id)) {
@@ -1807,6 +1885,7 @@ function runEvaluatorContractSelfTest() {
     source_coverage: [{
       anchor_id: blocks[0].id,
       classification: "rubric_requirement",
+      requirement_id: "req-contract-001",
       has_incomplete_text: false,
       notes: "Complete contract row.",
     }],
@@ -1858,6 +1937,30 @@ function runEvaluatorContractSelfTest() {
     throw new Error("The missing source-coverage contract self-test failed.");
   }
 
+  const unnamedCoverageRequirement = structuredClone(extraction);
+  unnamedCoverageRequirement.source_coverage[0].requirement_id = null;
+  const unnamedCoverageValidation = validateExtraction(
+    unnamedCoverageRequirement,
+    [document],
+    blocks,
+  );
+  if (
+    unnamedCoverageValidation.issues.source_coverage_requirement_binding_mismatch !== 1
+    || unnamedCoverageValidation.passed
+  ) throw new Error("The source-coverage requirement-binding self-test failed.");
+
+  const unknownCoverageRequirement = structuredClone(extraction);
+  unknownCoverageRequirement.source_coverage[0].requirement_id = "req-does-not-exist";
+  const unknownCoverageValidation = validateExtraction(
+    unknownCoverageRequirement,
+    [document],
+    blocks,
+  );
+  if (
+    unknownCoverageValidation.issues.source_coverage_requirement_binding_mismatch !== 1
+    || unknownCoverageValidation.passed
+  ) throw new Error("The unknown source-coverage requirement-binding self-test failed.");
+
   const truncatedBlock = {
     ...structuredClone(blocks[0]),
     id: "rubric-p1-b004",
@@ -1871,6 +1974,7 @@ function runEvaluatorContractSelfTest() {
   omittedTruncation.source_coverage.push({
     anchor_id: truncatedBlock.id,
     classification: "unusable_or_incomplete",
+    requirement_id: null,
     has_incomplete_text: true,
     notes: INCOMPLETE_SOURCE_COVERAGE_NOTE,
   });
@@ -1887,6 +1991,7 @@ function runEvaluatorContractSelfTest() {
   const truncatedCoverageSchema = coverageDecisionSchemaForBlock(truncatedBlock);
   if (
     truncatedCoverageSchema.properties.classification.enum[0] !== "unusable_or_incomplete"
+    || truncatedCoverageSchema.properties.requirement_id.enum[0] !== null
     || truncatedCoverageSchema.properties.has_incomplete_text.enum[0] !== true
     || truncatedCoverageSchema.properties.notes.enum[0] !== INCOMPLETE_SOURCE_COVERAGE_NOTE
   ) throw new Error("The strict truncated-source schema self-test failed.");
@@ -2005,6 +2110,7 @@ function runEvaluatorContractSelfTest() {
   conflictingDuplicate.source_coverage.push({
     ...structuredClone(conflictingDuplicate.source_coverage[0]),
     classification: "context_only",
+    requirement_id: null,
   });
   if (
     canonicalizeSourceCoverage(conflictingDuplicate) !== 0
@@ -2029,6 +2135,7 @@ function runEvaluatorContractSelfTest() {
   candidateMissing.source_coverage.push({
     anchor_id: candidateBlock.id,
     classification: "context_only",
+    requirement_id: null,
     has_incomplete_text: false,
     notes: "Incorrect context classification for contract test.",
   });
@@ -2046,6 +2153,7 @@ function runEvaluatorContractSelfTest() {
   atomicCoverage.source_coverage.push({
     anchor_id: candidateBlock.id,
     classification: "assignment_requirement",
+    requirement_id: "req-contract-atomic-1",
     has_incomplete_text: false,
     notes: "Numbered student action.",
   });
@@ -2136,6 +2244,7 @@ function runEvaluatorContractSelfTest() {
     source_coverage: {
       [blocks[0].id]: {
         classification: "rubric_requirement",
+        requirement_id: "req-contract-001",
         has_incomplete_text: false,
         notes: "Complete contract row.",
       },
@@ -2145,6 +2254,7 @@ function runEvaluatorContractSelfTest() {
   if (
     normalizedReceipt.source_coverage.length !== 1
     || normalizedReceipt.source_coverage[0].anchor_id !== blocks[0].id
+    || normalizedReceipt.source_coverage[0].requirement_id !== "req-contract-001"
   ) throw new Error("The source-coverage receipt normalization self-test failed.");
 
   const normalizedAtomicReceipt = {

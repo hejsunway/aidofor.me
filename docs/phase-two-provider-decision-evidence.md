@@ -1,7 +1,7 @@
 # Phase 2 provider decision evidence
 
-> Reviewed: 2026-07-20
-> Status: v13 fail-closed atomic/truncation contract passes offline; no v13 provider request; route remains unapproved
+> Reviewed: 2026-07-22
+> Status: the one approved v13 mini request failed one automatic coverage-consistency check; v14 repair passes offline only; route remains unapproved
 > Scope: OpenAI Responses API, completed `gpt-5.4-mini-2026-03-17` and `gpt-5.6-luna` staging comparisons
 
 This note records the owner's staging decisions without asserting that the
@@ -552,16 +552,46 @@ neutral ambiguity enforcement. The isolated-staging dry run again found 35
 anchors, 27 required source blocks, five complete atomic clauses, and one
 locally incomplete block. It made no provider request.
 
-The v13 private anchor registry is stored outside the repository with mode
-`0600`. A separate private 17-item checklist is version-bound to the exact v13
-project, model, prompt, schema, anchoring version, and document hashes; it also
-has mode `0600` and SHA-256
-`3ee2e0dc9d71b53cc3c190aed861cfc7ca090ac10bb151a637715c105d4d1324`.
-Its exact-scope `provider_request_approval` remains `false`. V13 is offline
-contract evidence only; it is not provider quality approval and does not
-authorize an automatic retry or fallback.
+The v13 private anchor registry and 17-item checklist are stored outside the
+repository with mode `0600`. The owner reviewed checklist SHA-256
+`3ee2e0dc9d71b53cc3c190aed861cfc7ca090ac10bb151a637715c105d4d1324`
+and explicitly approved exactly one mini request with no retry, no fallback,
+and a USD 0.048 maximum provider cost. Adding that immutable approval envelope
+produced execution-file SHA-256
+`27fe486fb0cdcff4cbaf4cca895f2bd4049b4c33a27e623dffc5cdba4855afd7`.
 
-The evaluator now fails closed unless the private checklist also contains an
+That single request completed on 2026-07-22 as
+`resp_04f69099eeeb93be016a5fcce9cfe48199b3f26bb488957481`. It used the exact
+`gpt-5.4-mini-2026-03-17` snapshot, `store: false`, no tools/search, no retry,
+and no fallback. The conservative pre-dispatch ceiling was USD 0.047172, below
+the approved USD 0.048 cap. The response took 13,186 ms, used 8,111 input
+tokens, zero cache-read or cache-write tokens, and 2,426 output tokens, for an
+estimated cost of USD 0.017001.
+
+The response did **not** pass the automatic gate. It returned 13 requirements,
+20 materialized anchors, one ambiguity, and all 27 required coverage receipts.
+All schema, source-shape, atomic-clause, uniqueness, incomplete-text,
+anchor/page/excerpt, and truncation checks passed. One coverage receipt,
+however, classified a block as an assignment requirement without returning any
+requirement that cited that block (`source_coverage_output_mismatch: 1`). Human
+review was therefore blocked and no review package was generated. Treating the
+classification alone as completion would be a fabricated success, so the
+route remains unapproved.
+
+V14 repairs that exact contract gap offline. Every requirement-classified
+coverage receipt must now name a real returned `requirement_id`, and that
+requirement must cite the same anchor. Every non-requirement or incomplete
+receipt must name `null`. Prompt
+`phase2-requirement-extraction-v14-source-requirement-binding` and schema
+`aido.requirement-extraction.v11` pass regression tests for missing, unknown,
+and mismatched bindings, while preserving v13 atomic-clause and truncation
+guards. A read-only isolated-staging dry run found the same 35 anchors, 27
+coverage obligations, five clauses, and one incomplete block and made no
+provider request. V14 has no approved checklist hash in code; another paid
+request is impossible until a new version-bound checklist is reviewed and the
+owner gives separate explicit approval.
+
+The evaluator fails closed unless the private checklist also contains an
 explicit `provider_request_approval` section for the exact staging project,
 model, prompt version, schema version, anchoring version, and reviewed document
 hashes. A matching checklist file by itself is no longer enough to permit a

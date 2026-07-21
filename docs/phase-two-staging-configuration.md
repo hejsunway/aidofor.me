@@ -72,20 +72,28 @@ no payment lifecycle test has been run yet.
    null metadata anchor. The human review still failed at 88.2% critical recall
    and 96.3% anchor accuracy: one critical country-impact purpose was omitted
    and one truncated rubric fragment was completed with unsupported wording.
-   The mini route therefore remains unapproved. The offline v13 contract now
+   The mini route therefore remains unapproved. The v13 contract
    binds the exact text and hash of five deterministic complete atomic clauses
    into the strict schema and requires a separate one-clause requirement for
    each receipt. The independently detected truncated rubric block produces no
    clause, cannot anchor semantic output, and may appear only in one fixed
-   neutral ambiguity. Regression tests and an isolated-staging dry run pass
-   without a provider request. A private version-bound 17-item v13 checklist
-   exists outside Git with mode `0600` and SHA-256
+   neutral ambiguity. Regression tests and an isolated-staging dry run passed.
+   A private version-bound 17-item v13 checklist exists outside Git with mode
+   `0600`; the owner reviewed SHA-256
    `3ee2e0dc9d71b53cc3c190aed861cfc7ca090ac10bb151a637715c105d4d1324`.
-   Its exact-scope `provider_request_approval` remains `false`; a paid v13
-   evaluation still requires review and separate explicit approval.
+   The owner then approved exactly one mini request with no retry/fallback and
+   a USD 0.048 cap. It completed for USD 0.017001 but failed one automatic
+   consistency check: one source block was classified as an assignment
+   requirement without any returned requirement citing it. Human review was
+   blocked and the route remains unapproved. Offline v14 now requires every
+   requirement-classified coverage receipt to name a real returned requirement
+   that cites the same anchor; non-requirement and incomplete receipts must name
+   `null`. Its regression suite and isolated-staging dry run pass with no
+   provider request, and paid v14 execution is code-locked pending a new
+   version-bound checklist and separate owner approval.
    Distinct cache-write pricing and usage accounting is now implemented and
    deployed to isolated staging. The reviewed draft still keeps both routes
-   and all controls disabled because the v13 provider quality gate has not
+   and all controls disabled because the provider quality gate has not
    passed and its worst-case route ceiling must be reviewed against the
    cache-write price. Evidence is
    recorded
