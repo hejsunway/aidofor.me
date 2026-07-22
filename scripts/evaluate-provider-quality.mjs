@@ -19,10 +19,14 @@ const INPUT_MICROUSD_PER_MILLION_TOKENS = 750_000;
 const CACHED_INPUT_MICROUSD_PER_MILLION_TOKENS = 75_000;
 const CACHE_WRITE_MICROUSD_PER_MILLION_TOKENS = 750_000;
 const OUTPUT_MICROUSD_PER_MILLION_TOKENS = 4_500_000;
-const MAX_OUTPUT_TOKENS = 4_000;
+// v14's strict source-to-requirement binding expands the request schema. Keep
+// the output ceiling below the owner's USD 0.048 pre-dispatch maximum; prior
+// complete mini output used 2,426 tokens, so 3,700 retains substantial headroom.
+const MAX_OUTPUT_TOKENS = 3_700;
 const MAX_PROVIDER_COST_MICROUSD = 48_000;
-// No v14 provider request is approved. Set this only after the owner reviews
-// and explicitly approves a checklist bound to this exact prompt/schema pair.
+// The one approved v14 request was consumed by response
+// resp_07564adb0d24326c016a5fd4626c90819b82de380e473cef8a. Relock paid
+// execution so the approved checklist cannot be reused for another request.
 const APPROVED_CHECKLIST_REVIEW_SHA256 = null;
 const TIMEOUT_MS = 120_000;
 const MAX_BLOCK_CHARS = 1_200;
@@ -884,6 +888,36 @@ function canonicalizeSourceCoverage(extraction) {
   return deduplicated;
 }
 
+function canonicalizeUnsupportedAtomicParts(extraction, blocks) {
+  const clausesById = new Map(atomicActionClauses(blocks).map((clause) => [clause.id, clause]));
+  const requirementsById = new Map(
+    (Array.isArray(extraction?.requirements) ? extraction.requirements : [])
+      .map((requirement) => [requirement?.requirement_id, requirement]),
+  );
+  let removed = 0;
+  for (const receipt of Array.isArray(extraction?.atomic_clause_coverage)
+    ? extraction.atomic_clause_coverage
+    : []) {
+    const clause = clausesById.get(receipt?.clause_id);
+    const requirement = requirementsById.get(receipt?.requirement_id);
+    if (!clause || !requirement) continue;
+    if (
+      normalizeExactSourceText(requirement.requirement)
+      !== normalizeExactSourceText(clause.source_text)
+    ) continue;
+    const visibleClause = normalizeEvidenceForMatch(clause.source_text);
+    for (const field of ["command_verbs", "deliverables", "constraints"]) {
+      if (!Array.isArray(requirement[field])) continue;
+      const supported = requirement[field].filter(
+        (part) => visibleClause.includes(normalizeEvidenceForMatch(part)),
+      );
+      removed += requirement[field].length - supported.length;
+      requirement[field] = supported;
+    }
+  }
+  return removed;
+}
+
 function blockExcerpt(text) {
   return text;
 }
@@ -1349,6 +1383,8 @@ function publicSummaryFromReport(report) {
     source_coverage_count: report.automatic_validation.source_coverage_count ?? null,
     deduplicated_source_coverage_count:
       report.automatic_validation.deduplicated_source_coverage_count ?? 0,
+    unsupported_atomic_parts_removed:
+      report.automatic_validation.unsupported_atomic_parts_removed ?? 0,
     null_metadata_anchors_removed:
       report.automatic_validation.null_metadata_anchors_removed ?? 0,
     canonicalized_source_labels: report.automatic_validation.canonicalized_source_labels,
@@ -1541,6 +1577,10 @@ function revalidateSavedReport(report, project, documents, blocks) {
   const canonicalizedSourceLabels = bindAnchorsToKnownDocuments(report.extraction, documents);
   const deduplicatedSourceCoverageCount = canonicalizeSourceCoverage(report.extraction);
   normalizeAtomicClauseCoverageReceipt(report.extraction);
+  const unsupportedAtomicPartsRemoved = canonicalizeUnsupportedAtomicParts(
+    report.extraction,
+    blocks,
+  );
   const nullMetadataAnchorsRemoved = canonicalizeNullMetadataAnchors(report.extraction);
   const materializedAnchorCount = materializeAnchors(report.extraction, blocks);
   const validation = validateExtraction(report.extraction, documents, blocks, report.schema_version);
@@ -1563,6 +1603,10 @@ function revalidateSavedReport(report, project, documents, blocks) {
     deduplicated_source_coverage_count: Math.max(
       Number(report.automatic_validation?.deduplicated_source_coverage_count ?? 0),
       deduplicatedSourceCoverageCount,
+    ),
+    unsupported_atomic_parts_removed: Math.max(
+      Number(report.automatic_validation?.unsupported_atomic_parts_removed ?? 0),
+      unsupportedAtomicPartsRemoved,
     ),
     null_metadata_anchors_removed: Math.max(
       Number(report.automatic_validation?.null_metadata_anchors_removed ?? 0),
@@ -1688,6 +1732,7 @@ async function runEvaluation(apiKey, project, documents, blocks, anchoredText, c
   normalizeSourceCoverageReceipt(extraction);
   normalizeAtomicClauseCoverageReceipt(extraction);
   const deduplicatedSourceCoverageCount = canonicalizeSourceCoverage(extraction);
+  const unsupportedAtomicPartsRemoved = canonicalizeUnsupportedAtomicParts(extraction, blocks);
   const canonicalizedSourceLabels = bindAnchorsToKnownDocuments(extraction, documents);
   const nullMetadataAnchorsRemoved = canonicalizeNullMetadataAnchors(extraction);
   const materializedAnchorCount = materializeAnchors(extraction, blocks);
@@ -1765,6 +1810,7 @@ async function runEvaluation(apiKey, project, documents, blocks, anchoredText, c
         ambiguity_count: extraction.ambiguities.length,
         source_coverage_count: extraction.source_coverage.length,
         deduplicated_source_coverage_count: deduplicatedSourceCoverageCount,
+        unsupported_atomic_parts_removed: unsupportedAtomicPartsRemoved,
         null_metadata_anchors_removed: nullMetadataAnchorsRemoved,
         canonicalized_source_labels: canonicalizedSourceLabels,
         materialized_anchor_count: materializedAnchorCount,
@@ -2181,6 +2227,24 @@ function runEvaluatorContractSelfTest() {
   if (!validateExtraction(atomicCoverage, [document], [...blocks, candidateBlock]).passed) {
     throw new Error("The complete atomic-clause coverage self-test failed.");
   }
+
+  const unsupportedAtomicParts = structuredClone(atomicCoverage);
+  const unchangedAtomicRequirement = unsupportedAtomicParts.requirements.at(-2).requirement;
+  unsupportedAtomicParts.requirements.at(-2).deliverables.push("unsupported summary");
+  if (
+    validateExtraction(unsupportedAtomicParts, [document], [...blocks, candidateBlock])
+      .issues.atomic_clause_requirement_mismatch !== 1
+    || canonicalizeUnsupportedAtomicParts(
+      unsupportedAtomicParts,
+      [...blocks, candidateBlock],
+    ) !== 1
+    || unsupportedAtomicParts.requirements.at(-2).requirement !== unchangedAtomicRequirement
+    || !validateExtraction(
+      unsupportedAtomicParts,
+      [document],
+      [...blocks, candidateBlock],
+    ).passed
+  ) throw new Error("The unsupported atomic-part canonicalization self-test failed.");
 
   const missingAtomicPurpose = structuredClone(atomicCoverage);
   missingAtomicPurpose.requirements[1].requirement = "read the case studies and infer a purpose";

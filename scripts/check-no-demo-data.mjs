@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 
-const productRoots = ["app/app", "components/projects", "lib/projects"];
+const productRoots = ["app", "components", "lib"];
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
 const prohibited = [
   /\bmockData\b/i,
@@ -10,6 +10,17 @@ const prohibited = [
   /\bfakeResponse\b/i,
   /workspace preview/i,
   /does not save data/i,
+  /video placeholder/i,
+  /4\.9\/5[^\n]{0,80}4268 students/i,
+  /trusted by students from universities/i,
+  /REQUIREMENTS FOUND/i,
+  /EC[–-]014/i,
+  /Leadership autonomy and performance/i,
+  /2 of 8 confirmed/i,
+  /6 items confirmed/i,
+  /2,000 words allocated/i,
+  /3 evidence cards/i,
+  /Critical analysis · 30%/i,
 ];
 
 async function sourceFiles(directory) {
@@ -36,4 +47,4 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log("Authenticated product code contains no known demo-data patterns.");
+console.log("Product code contains no known demo-data or fabricated-proof patterns.");

@@ -2,7 +2,7 @@
 
 > Date: 2026-07-22
 > Scope: prepaid credits, Stripe payments, provider gateway, and loss controls
-> Release status: schema and privilege mechanisms verified on isolated staging; paid external flows remain disabled
+> Release status: Phase 2 exit gate complete on isolated staging; production promotion remains separately unauthorized
 
 ## Completed locally
 
@@ -39,13 +39,13 @@
 | Versioned provider prices and feature rate cards | Core migration plus server-side integer quote calculation | Complete locally |
 | Lots, wallet, append-only ledger, reservations, usage, payments, refunds, reversals | Core and atomic migrations; pgTAP invariants | Complete locally |
 | Atomic reserve, settle, release, expire, refund, chargeback | Service-only functions plus concurrency test | Complete locally |
-| Verified, idempotent Stripe grants | Raw-signature route and atomic event functions | Code complete; external Stripe test-mode evidence missing |
-| Real balance, history, subscription, and top-up interfaces | Real wallet/history, Checkout, lifecycle projection, and configured portal action | Code complete; external Stripe test-mode evidence missing |
+| Verified, idempotent Stripe grants | Signed top-up event `evt_1TvkZj1tdTVob40GuZuH0MAZ`, paid-invoice event `evt_1Tvkvk1tdTVob40GrfNphs2I`, and duplicate redelivery with unchanged counts | Complete on isolated staging |
+| Real balance, history, subscription, and top-up interfaces | Real top-up and subscription Checkout, failed renewal projection, portal period-end cancellation, refund, dispute, and frozen-wallet history | Complete on isolated staging |
 | Plan/user/concurrency/provider controls and kill switches | Rate cards, system controls, provider budget authorization | Complete locally |
-| Server-only gateway with hard ceilings | OpenAI, DeepSeek, and MiniMax adapters; database authorization plus single-dispatch claim | Complete locally; the single approved v13 mini request failed one automatic source-coverage/output consistency check |
-| Provider-reported usage and actual-cost capture | Separate ordinary/cache-read/cache-write token fields, tool/search/latency/request fields, database-recomputed cost, settlement, and provider-invoice comparison | Code and staging schema complete; first real gateway event and provider export/invoice evidence missing |
-| Approved lower-cost routing | Versioned approved route table and fail-closed lookup | Mechanism complete; reviewed staging draft remains disabled because quality gate failed |
-| Automated financial and provider-invoice reconciliation | Durable daily runner, Stripe comparison, immutable hashed invoice import, internal mismatch functions, and completed manual staging run `9d55511f-f8cc-4387-912e-c3d415611366` | Routes and persistence verified on staging; scheduler-originated run, first real invoice, and Stripe lifecycle still missing |
+| Server-only gateway with hard ceilings | OpenAI, DeepSeek, and MiniMax adapters; database authorization plus single-dispatch claim | Complete; v14 automatic grounding passed after transparent offline sanitization, with limitations retained for student confirmation |
+| Provider-reported usage and actual-cost capture | Response `resp_07cf317ffb241b61016a5fdd5ee49081988b8fd78f97b2b5f4` recorded 103 input, 56 output, 330 microusd, one dispatch, 263 captured credits, and 95 released credits; the exact one-minute OpenAI organization-usage row independently matched | Complete on isolated staging |
+| Approved lower-cost routing | Versioned approved route table and fail-closed lookup | One mini route and four required controls atomically applied to isolated staging; Luna remains disabled |
+| Automated financial and provider-invoice reconciliation | Import `64b0d0ed-a136-4780-8a40-980ed8b11d12` records the exact 330-microusd artifact SHA-256 `3fca4456d34909942a1ce3be7d1bc4b6c50df8f163f196be1224b6c453a07684`; run `6e27c501-a8b6-444c-ad27-4765603f4fe7` checked one active invoice with zero issues | Complete on isolated staging |
 
 ## Verification evidence
 
@@ -53,18 +53,28 @@
 supabase db reset --local --no-seed        pass
 supabase db lint --local --level warning   no schema errors
 supabase migration up --local              cache-write migration pass
-supabase test db --local                   202/202 pass
+supabase test db --local                   288/288 pass across seven files
 pnpm test:phase2                           concurrent duplicate/overspend pass
 pnpm test:billing-config                   environment/project boundary pass
 pnpm test:providers                        OpenAI/DeepSeek/MiniMax contracts pass
 pnpm phase2:evaluate-provider --self-test  v14 source/requirement binding guards pass; no provider request
 v14 isolated-staging evaluator dry run     35 anchors / 27 coverage rows / 5 clauses; no provider request
 pnpm phase2:verify-cron-staging            deployed 401/200 and persisted-run checks pass
+phase2 insufficient-credit staging check  P0001 before reservation; no authorization, dispatch, usage, or ledger side effect
+phase2 real gateway staging check         one dispatch; 330 microusd; 263 capture / 95 release; pass
+phase2 OpenAI organization usage export   exact minute/model/request/tokens; 330 microusd; pass
+phase2 provider invoice import             immutable source hash 3fca4456...a07684; pass
+phase2 post-import reconciliation          one invoice checked; zero issues; pass
+phase2 subscription initial/failed/cancel 2,900 invoice-only grant; zero failed/cancel financial effect; pass
+phase2 refund/dispute lifecycle           1,737 refund recovery + 263 freeze; disputed grant net zero; pass
+phase2 Vercel Cron dashboard run          maintenance/reconcile GET 200; completed zero-issue run; pass
 supabase db advisors --local --fail-on warn no issues
 supabase db push --linked --dry-run         exactly one staging migration
 supabase db push --linked                   cache-write migration applied
 supabase db query --linked audit SQL        8/8 grouped staging checks pass
 supabase db lint --linked --level warning   no schema errors
+linked security advisors                    no high/critical; accepted Free-plan WARN plus deny-by-default INFO
+linked performance advisors                 INFO-only unused indexes on the tiny staging dataset
 staging PostgREST schema/RPC probe          both columns and new RPC signature pass
 pnpm check:no-demo                         pass
 pnpm lint                                  pass
@@ -72,9 +82,33 @@ pnpm typecheck                             pass
 pnpm build                                 pass
 ```
 
+The 2026-07-22 live read-only recheck against the exact isolated staging ref
+`vokjkogzvtohdinhxhkk` passed all eight grouped schema/privilege audit rows.
+Billing configuration, provider prices/routes, and both credit products are
+applied. The real RM20 sandbox Checkout now contributes one processed payment
+event, one 2,000-credit top-up lot, and one matching grant ledger entry;
+subscription, subscription-event, usage, refund, dispute, and reconciliation
+tables now contain the verified staging lifecycle records. The provider
+invoice-import table contains the exact independently exported 330-microusd row
+as immutable import `64b0d0ed-a136-4780-8a40-980ed8b11d12`.
+The secret-safe preflight passes the staging target, exact Supabase URL,
+service credential, Stripe test mode, webhook secret, portal configuration,
+cron secret, and the accepted mini route. The reviewed configuration is now
+applied; remaining exit work is real financial/provider lifecycle evidence,
+not another single-rubric tuning loop.
+
+The real signed-in staging account was also tested before funding against the
+applied `assignment.requirement_extraction` mini route. Its valid 263-credit
+quote and 356-credit safety reservation failed atomically with PostgreSQL code
+`P0001` and message `Insufficient credits`. Counts for reservations, provider
+authorizations, usage events, and ledger entries were identical before and
+after the attempt, proving the gateway cannot dispatch a provider request when
+the wallet has no funds. The private evidence file is stored outside Git and
+contains only non-secret identifiers plus a hash of the staging account ID.
+
 The concurrency test makes two simultaneous identical reservations and proves one reservation/ledger effect. It then makes two distinct simultaneous 80-credit reservations against a 100-credit wallet and proves exactly one succeeds. The test is localhost-only, requires `AIDO_ALLOW_LOCAL_DB_RESET=1`, and resets the isolated database afterward so no fixture data remains.
 
-## Not complete / not authorized for release
+## Staging limitations and production boundary
 
 - The isolated `AidoForMe Staging` Supabase project
   (`vokjkogzvtohdinhxhkk`, Singapore, $0/month) now contains all canonical
@@ -85,16 +119,16 @@ The concurrency test makes two simultaneous identical reservations and proves on
   byte; their alternate timestamps were then normalized to the canonical
   versions. A final dry run listed only the cache-write migration. Read-only
   staging probes confirm the cache-write price column, usage column, and new
-  service RPC signature are live. Both affected tables still contain zero
-  rows, so this is schema evidence rather than provider-call evidence. Local
+  service RPC signature are live. The provider-price and usage tables now
+  contain the reviewed prices and the one verified gateway usage event. Local
   database advisors report no issues. The connected Supabase plugin
   independently confirms that the exact staging project is healthy, all 14
   canonical migrations are present, and the only warning-level hosted finding
   is disabled leaked-password protection. The signed-in staging dashboard
   confirms that this control is available only on Supabase Pro while the
-  isolated project is on Free. No plan or billing change was made. The final
-  advisor gate therefore requires an approved staging-plan upgrade or an
-  explicit documented acceptance of this platform limitation.
+  isolated project is on Free. No plan or billing change was made. The owner
+  explicitly accepts this limitation for isolated staging only; leaked-password
+  protection remains a hard requirement before any public or production launch.
 - Stripe is now authenticated to the isolated `AidoForMe` sandbox account
   `acct_1Tv6yz1tdTVob40G`. The approved RM20/2,000-credit top-up and
   RM29/2,900-credit monthly prices are verified with `livemode: false`, and the
@@ -105,8 +139,21 @@ The concurrency test makes two simultaneous identical reservations and proves on
   destination now points at the isolated Vercel staging deployment and its
   signing secret is stored server-side only. See
   [`phase-two-stripe-staging-evidence.md`](./phase-two-stripe-staging-evidence.md).
-  No real webhook delivery or payment/refund/dispute lifecycle evidence exists
-  yet.
+  Real top-up event `evt_1TvkZj1tdTVob40GuZuH0MAZ` first received HTTP 500
+  while Stripe settlement details were not yet available, then Stripe's
+  automatic retry received HTTP 200 at `2026-07-21T20:47:55Z`. The resulting
+  database state is exactly one processed payment event, one 2,000-credit lot
+  expiring after 180 days, one grant ledger entry, and a non-negative 2,000
+  available-credit wallet. A Workbench manual resend received HTTP 200 at
+  `2026-07-21T20:49:04Z`; machine comparison against the pre-redelivery
+  baseline proved the payment, lot, grant, and wallet state were unchanged.
+  The paid subscription invoice granted exactly 2,900 credits; Checkout and
+  subscription creation granted zero. A controlled RM29 failed renewal created
+  no credit effect, the portal scheduled cancellation for the period end, the
+  original RM20 refund recovered 1,737 credits and froze 263 unrecovered, and a
+  disputed RM20 Checkout produced a +2,000/-2,000 net-zero effect. The dispute
+  event preceded Checkout completion by one second; signed event redelivery
+  after the source grant proved safe out-of-order recovery.
 - Controlled OpenAI staging evaluations were executed against the uploaded
   developer-owned brief/rubric. The completed saved response failed real
   PDF-page/excerpt anchor validation. After explicit approval, a deterministic
@@ -187,18 +234,35 @@ The concurrency test makes two simultaneous identical reservations and proves on
   but one of 27 coverage receipts classified a block as an assignment
   requirement without any returned requirement citing it. Automatic
   validation failed, human review was blocked, and no retry or fallback was
-  made. Offline v14 now requires each requirement-classified receipt to name a
+  made. V14 requires each requirement-classified receipt to name a
   real returned requirement that cites the same anchor, while every other
   receipt must name `null`. Its regression suite and isolated-staging dry run
-  pass without a provider request. Paid v14 execution is deliberately locked
-  until a new version-bound checklist is reviewed and separately approved.
+  passed without a provider request. A private v14 checklist was stored outside
+  Git with mode `0600`; its reviewed SHA-256 was
+  `958c91b347b16456f9cdf8f158b1822e3e2cad910afbe771ad3792be5d0668a5`.
+  It was bound to the exact v14 prompt, v11 schema, v7 anchoring contract,
+  isolated staging project, two document hashes, `gpt-5.4-mini-2026-03-17`,
+  no retry or fallback, and a USD 0.048 maximum. The approved request completed
+  as `resp_07564adb0d24326c016a5fd4626c90819b82de380e473cef8a` for an estimated
+  USD 0.018463. After a transparent offline sanitizer removed four unsupported
+  optional labels without changing requirement text or anchors, every
+  automatic guard passed. The locked review recorded 70.6% critical recall and
+  100% returned requirement-anchor accuracy. The owner explicitly clarified
+  that one subject-specific rubric is staging evidence rather than a universal
+  perfection gate. Mini is accepted only for isolated staging with student
+  confirmation/editing required; the 95% recall target remains a broader
+  multi-subject pre-launch gate. The consumed evaluation request is code-locked.
   The evaluator requires an explicit private `provider_request_approval` block
   bound to the exact staging project, model, prompt, schema, anchoring version,
   document hashes, cost ceiling, retry policy, and fallback policy before any
   paid provider request can run.
-  The cache-write accounting defect is now closed in code and on isolated
-  staging. Because the provider quality gate still failed, both routes and all
-  controls remain disabled and unapplied.
+  The cache-write accounting defect is closed in code and on isolated staging.
+  Reviewed configuration SHA-256
+  `527f53f9bd3d4f28d7fd96b053250ffbdd48ceccbf956cde81511c4cccb7e53b`
+  was applied atomically as import `aad70ebe-6821-47ca-90cf-5ec2b70fbe95`.
+  Read-back confirms one approved mini route, two credit products, four enabled
+  controls, and one disabled Luna control. The real top-up lifecycle has now
+  created the single verified payment/lot/grant described above.
 - The Stripe Sandbox catalog now matches the reviewed configuration exactly for
   both product keys, amounts, billing modes, grants, and expiry. A guarded
   metadata repair updated only the four mismatched sandbox product-key fields;
@@ -206,27 +270,36 @@ The concurrency test makes two simultaneous identical reservations and proves on
   read-only rerun found zero pending changes. Deployment
   `dpl_DXAqB56QpptwmrLnj7RcYdchJXt5` also returns HTTP 400 for both missing and
   invalid webhook signatures, independently confirmed by Vercel runtime logs.
-  These are configuration and rejection-path facts, not financial lifecycle
-  evidence. Test-mode Checkout, valid signed webhook delivery, portal
-  cancellation, retry/dunning, refund, dispute, duplicate delivery, and
-  financial reconciliation are still required.
-- The staging production deployment now has real cron-route evidence. Browser
-  GET requests to maintenance and reconciliation returned 401. Authenticated
-  POSTs returned 200; maintenance had no failures, and reconciliation persisted
-  completed run `9d55511f-f8cc-4387-912e-c3d415611366` with six internal
-  checks and zero issues. Vercel runtime logs independently show all four
-  requests. This was a manual authenticated verification, not a scheduler
-  trigger. The deployment missed the 2026-07-20 UTC windows, so scheduler-
-  originated evidence remains required from the next eligible daily windows.
+  Test-mode top-up, subscription, portal cancellation, failed renewal, refund,
+  dispute, duplicate delivery, and out-of-order retry are now verified.
+- The staging production deployment now has Vercel Cron evidence. Dashboard
+  `Run` invoked both registered jobs through Vercel itself; runtime logs show
+  GET 200 for maintenance at `2026-07-21T21:50:26Z` and reconciliation at
+  `2026-07-21T21:50:32Z`. Reconciliation persisted completed run
+  `944b3aca-e6c0-4980-8fa4-a490ac24154e` with zero issues. Ordinary browser
+  requests without `CRON_SECRET` remain HTTP 401. Vercel documents Hobby cron
+  precision as hourly, so the earlier automatic run at `02:37Z` falls within
+  the configured `02:17Z` hour rather than representing a timing mismatch.
   See [`phase-two-cron-staging-evidence.md`](./phase-two-cron-staging-evidence.md).
-- Provider invoice reconciliation has a real import path but cannot be proven until a real provider export/invoice is supplied. Network failures with no provider-reported usage rely on this comparison to discover a late provider charge.
-- A private, outside-repository staging configuration draft now contains the
-  approved Stripe products, credit grants/expiry, Luna and mini OpenAI price snapshots,
-  margin/FX controls, and operational limits. Its provider route and all four
-  controls remain disabled. Secret-safe preflight passes the isolated Supabase
-  target, Stripe test mode, and required server-secret checks, then correctly
-  blocks because there is no approved provider route. Nothing was applied, so
-  the previously verified empty staging configuration remains unchanged.
+- The exact OpenAI organization-usage result for `2026-07-21T20:58:00Z` through
+  `20:59:00Z` was exported on 2026-07-22. The source export SHA-256 is
+  `d44bc6c5e5ebb90ee4bc3b2eab580f881675b60bdbdac3ef2a2d6114ae740555`;
+  its mode-`0600` import artifact SHA-256 is
+  `3fca4456d34909942a1ce3be7d1bc4b6c50df8f163f196be1224b6c453a07684`.
+  Immutable import `64b0d0ed-a136-4780-8a40-980ed8b11d12` records 330
+  microusd. Fresh reconciliation run
+  `6e27c501-a8b6-444c-ad27-4765603f4fe7` completed at
+  `2026-07-22T02:39:46.448Z`, checked one provider invoice, and persisted zero
+  issues. The verifier recorded `provider_request_made: false`. Private
+  evidence remains outside Git at
+  `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-openai-usage-import-2026-07-22.json`
+  and
+  `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-reconciliation-after-provider-import-2026-07-22.json`.
+- The private, outside-repository reviewed configuration contains the approved
+  Stripe products, grants/expiry, Luna and mini price snapshots, margin/FX
+  controls, and operational limits. The same file was applied atomically to
+  isolated staging; mini and its four control scopes are enabled, while Luna
+  remains disabled.
 - Secret-safe local inspection on 2026-07-20 found `.env.local` still targets the shared production Supabase URL and does not define the Phase 2 service-role, Stripe, cron, target, or provider variables. It must not be used for staging evidence; configure a separate staging environment without committing or printing secret values.
 - No Phase 2 migration was applied to the shared production database. The
   local CLI was found linked to shared production, was relinked to the exact
@@ -237,13 +310,11 @@ The concurrency test makes two simultaneous identical reservations and proves on
 
 ## Release decision
 
-Keep Phase 2 disabled in production. Sandbox connection, real Aido
-products/prices, the cancellation-only portal configuration, isolated staging
-deployment, and sandbox webhook/server-secret configuration are complete. The
-remaining Phase 2 exit gate is external and configuration-specific: complete
-the provider quality gate with a materially safer extraction approach,
-enable/review the currently disabled configuration,
-and apply it atomically; perform the first
-real provider response and invoice/export comparison; and pass the full
-Checkout/subscription/refund/dispute/cron evidence set. Then review the
-additive production migration set separately.
+Keep Phase 2 disabled in production. All real Stripe, provider-gateway, wallet,
+provider-invoice, and Vercel Cron staging lifecycles are complete. The only
+final schema, advisor, database, concurrency, billing-boundary,
+provider-contract, no-demo, lint, typecheck, and build gates passed on
+2026-07-22. Phase 2 is exit-gate complete for isolated staging, so Phase 3 may
+begin there. Production promotion remains separately unauthorized, and leaked-
+password protection plus the retained multi-subject quality gate remain hard
+requirements before public or production launch.

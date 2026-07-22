@@ -2,7 +2,25 @@
 
 > Date: 2026-07-20
 > Purpose: durable context for a separate Codex task
-> Decision: Phase 2 is code-complete but **not exit-gate complete**; finish its real external staging evidence before implementing Phase 3
+> Original handoff decision (superseded by the completion update below): Phase 2 was code-complete but not yet exit-gate complete
+
+## Completion update — 2026-07-22
+
+Phase 2 is now exit-gate complete on isolated staging. The exact one-minute
+OpenAI organization-usage row matched the gateway's 103 input, 56 output, and
+330-microusd record; mode-`0600` artifact SHA-256
+`3fca4456d34909942a1ce3be7d1bc4b6c50df8f163f196be1224b6c453a07684`
+was imported immutably as `64b0d0ed-a136-4780-8a40-980ed8b11d12`.
+Reconciliation run `6e27c501-a8b6-444c-ad27-4765603f4fe7` checked one active
+provider invoice with zero issues and made no provider request.
+
+The final linked migration/audit/lint and live-advisor checks passed, as did a
+clean local reset, 288/288 database assertions, concurrency, billing-boundary,
+provider-contract, no-demo, lint, typecheck, and production build gates. The
+Free-plan leaked-password warning is accepted for isolated staging only and is
+mandatory to resolve before public/production launch. Phase 3 may now begin on
+isolated staging. Shared production Supabase and live Stripe remain outside
+scope without separate explicit approval.
 
 ## Governing documents
 

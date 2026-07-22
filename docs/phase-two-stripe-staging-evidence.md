@@ -1,6 +1,6 @@
 # Phase 2 Stripe staging evidence
 
-> Verified: 2026-07-20
+> Verified: 2026-07-22
 > Stripe account: `AidoForMe` (`acct_1Tv6yz1tdTVob40G`)
 > Mode: sandbox/test only (`livemode: false`)
 
@@ -79,13 +79,95 @@ the failure boundary so a configured endpoint returns HTTP 400 for both a
 missing signature and an invalid signature; HTTP 503 is reserved for a missing
 server-side webhook secret. The secret-safe verifier observed both HTTP 400
 responses at the stable staging URL. Vercel runtime logs independently recorded
-the two POST requests against that exact deployment. These are rejection-path
-checks only, not proof of a valid signed event.
+the two POST requests against that exact deployment.
 
-## Still missing
+## Real top-up and duplicate delivery
 
-No valid signed financial delivery has been received yet. Test purchases,
-renewal, failed renewal, cancellation, refund, dispute, duplicate delivery,
-and financial reconciliation have not yet been executed. Those real sandbox
-events must prove signature verification, idempotency, credit effects, and
-reconciliation before the Phase 2 exit gate can pass.
+The signed sandbox event `evt_1TvkZj1tdTVob40GuZuH0MAZ` represents the real
+Aido Checkout Session `cs_test_a1BbGyjttpsEV7olC9mEvyi89PvHF24YxjjDtklnzasCRCejQJK3PbPYvz`
+for the approved RM20 top-up. Stripe Workbench records:
+
+- initial delivery: HTTP 500 at `2026-07-21T20:47:40Z`, before the settled
+  balance transaction was available;
+- automatic retry: HTTP 200 at `2026-07-21T20:47:55Z`;
+- operator-requested redelivery of the same event: HTTP 200 at
+  `2026-07-21T20:49:04Z`, labelled `Retried manually`.
+
+After the successful automatic retry, the isolated staging database contained
+exactly one processed payment event, one 2,000-credit top-up lot expiring 180
+days after grant, one matching append-only grant entry, and a wallet with 2,000
+available and zero reserved credits. A machine comparison after the manual
+redelivery proved the payment, lot, grant, and wallet facts were byte-for-byte
+unchanged. No second financial effect occurred and no balance was negative.
+
+The secret-safe initial and post-redelivery reports remain outside Git with
+mode `0600` at:
+
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-topup-initial-2026-07-22.json`
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-topup-post-redelivery-2026-07-22.json`
+
+## Subscription lifecycle
+
+Real subscription Checkout
+`cs_test_a1mUSoWAyitt1vVTEJRRC6iqAqdKuopTQ9YdWTPFNmYPz1ceotcaKVcLBb`
+created subscription `sub_1Tvkvj1tdTVob40G1UOr9bUp`. Initial paid invoice
+`in_1Tvkvh1tdTVob40G13QMqB8T` emitted signed `invoice.paid` event
+`evt_1Tvkvk1tdTVob40GrfNphs2I`. The first delivery exposed an invalid
+over-deep Stripe expansion and returned 500. Commit `349678e` removed that
+unsupported expansion; the deployed signed redelivery then succeeded.
+
+The persisted effect is exactly one 2,900-credit subscription lot expiring
+after 35 days and one grant. Checkout completion and subscription creation
+produced zero financial rows, proving credits are granted only on
+`invoice.paid`.
+
+A controlled subscription-attached RM29 off-cycle renewal invoice
+`in_1TvlA31tdTVob40GhUDzrn49` used Stripe's official decline-after-attach
+sandbox payment method. It emitted `invoice.payment_failed` event
+`evt_1TvlA71tdTVob40GK78vJPph`, projected `past_due`, recorded the failure
+time, changed no wallet balance, and created no payment event. The evidence is
+truthfully labelled off-cycle because its Stripe `billing_reason` is `manual`.
+
+The customer cancelled through the real Stripe portal. The portal displayed
+“Cancels Aug 21”; Stripe represented the end-of-period schedule with explicit
+`cancel_at=2026-08-21T21:21:53Z` instead of the legacy boolean flag. Signed
+subscription event `evt_1TvlEP1tdTVob40GrfuM4tLR` persisted that exact
+timestamp with zero financial effect and an unchanged 4,637-credit wallet.
+
+Private evidence files:
+
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-subscription-initial-2026-07-22.json`
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-subscription-failed-renewal-2026-07-22.json`
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-subscription-portal-cancellation-2026-07-22.json`
+
+## Refund and dispute reversal
+
+Full refund `re_3TvkZh1tdTVob40G07xCuh4o` reversed the original RM20 top-up
+through signed event `evt_3TvkZh1tdTVob40G07nzNa7n`. Because 263 of the 2,000
+credits had already funded the real gateway call, the atomic reversal recovered
+1,737, recorded 263 unrecovered, froze the wallet, and left 2,900 available.
+No balance became negative.
+
+A second real RM20 Checkout
+`cs_test_a1HL1w16NLdyTvRY7GB9oiAhvTZtOg342gj4W5WQvG4Ef3dKDCYew0AdPZ`
+used Stripe's official fraudulent-dispute sandbox card. Stripe created dispute
+event `evt_1TvlJh1tdTVob40GIH0HEXHD` one second before Checkout event
+`evt_1TvlJi1tdTVob40GOROp5Z22`. The initial reversal correctly failed closed
+because its source purchase did not exist yet. Signed Checkout redelivery
+created the single +2,000 grant; signed dispute redelivery then created the
+single -2,000 reversal. The lot is reversed, the disputed purchase has net zero
+credits, and the wallet remains frozen at 2,900 available plus the prior 263
+unrecovered.
+
+Private evidence files:
+
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-refund-reversal-2026-07-22.json`
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-dispute-reversal-2026-07-22.json`
+
+## Stripe gate status
+
+The real top-up, duplicate delivery, subscription paid invoice, failed renewal,
+portal period-end cancellation, refund, dispute, out-of-order retry, frozen
+exposure, and non-negative-wallet checks are complete. Stripe is no longer a
+Phase 2 blocker. Provider export reconciliation and the final full regression
+gate remain outside this document.

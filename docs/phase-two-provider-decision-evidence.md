@@ -1,14 +1,15 @@
 # Phase 2 provider decision evidence
 
 > Reviewed: 2026-07-22
-> Status: the one approved v13 mini request failed one automatic coverage-consistency check; v14 repair passes offline only; route remains unapproved
+> Status: v14 accepted for isolated staging; one mini route is applied, while broader multi-subject quality evidence remains a pre-launch gate
 > Scope: OpenAI Responses API, completed `gpt-5.4-mini-2026-03-17` and `gpt-5.6-luna` staging comparisons
 
-This note records the owner's staging decisions without asserting that the
-model has passed Aido's quality gate. The route must remain unapplied until a
-developer-owned real brief/rubric passes the versioned extraction evaluation.
-Current pricing and product claims must be rechecked when the configuration is
-approved.
+This note records the owner's staging decisions without treating one rubric as
+a universal benchmark. V14 passed the automatic grounding gate and returned
+only source-supported requirement rows. The owner accepted it for isolated
+staging with student confirmation/editing required for omissions. The 95%
+critical-recall target remains a separate pre-launch gate across a consented,
+de-identified, multi-subject evaluation set.
 
 ## Current first-party evidence
 
@@ -35,12 +36,10 @@ approved.
   Modified Abuse Monitoring or Zero Data Retention. Source:
   [OpenAI regional support](https://developers.openai.com/api/docs/guides/your-data#support-by-region).
 
-## Approved staging policy
+## Current staging policy
 
-- Controlled comparison target: `gpt-5.6-luna` through the Responses API,
-  with `reasoning.effort: none` to preserve the old mini route's effective
-  baseline. The prior `gpt-5.4-mini-2026-03-17` route remains a manual
-  technical fallback only; it is not quality-approved.
+- Approved isolated-staging route: `gpt-5.4-mini-2026-03-17` through the
+  Responses API. `gpt-5.6-luna` remains disabled and is not a fallback.
 - Developer-owned staging documents only; no customer or copied production
   documents.
 - Send `store: false`. The owner accepts that default abuse-monitoring logs may
@@ -63,21 +62,56 @@ the approved exchange rate, so the buffered maximum remains inside the 20%
 target. The intended reservation remains below the approved 400-credit per-job
 maximum.
 
-## Unresolved exit evidence
+## Provider invoice/export reconciliation
 
-1. **Quality:** provider marketing and feature support are not Aido quality
-   evidence. The selected snapshot must pass a versioned extraction evaluation
-   on developer-owned real briefs/rubrics, including source-anchor accuracy,
-   invalid-output behavior, and the PRD's critical-requirement thresholds.
-2. **Credential and call evidence:** an OpenAI project key must be configured in
-   the staging server environment, then one real response must record token
-   usage, latency, request ID, actual cost, validation, reservation, and
-   settlement lineage.
-3. **Invoice/export evidence:** the corresponding real OpenAI usage or billing
-   export must be imported by hash and reconciled with the recorded response.
+The OpenAI organization usage endpoint returned exactly one matching row for
+`2026-07-21T20:58:00Z` through `20:59:00Z`: model
+`gpt-5.4-mini-2026-03-17`, one request, 103 input tokens, zero cached input
+tokens, and 56 output tokens. The reviewed price snapshot independently
+calculates 330 microusd, matching the gateway record. The raw source-export
+SHA-256 is `d44bc6c5e5ebb90ee4bc3b2eab580f881675b60bdbdac3ef2a2d6114ae740555`.
 
-Until the quality evaluation passes, no OpenAI route should have `approved:
-true` in the applied staging billing configuration.
+The mode-`0600` import artifact has SHA-256
+`3fca4456d34909942a1ce3be7d1bc4b6c50df8f163f196be1224b6c453a07684`
+and was inserted immutably as provider invoice import
+`64b0d0ed-a136-4780-8a40-980ed8b11d12`. Fresh isolated-staging reconciliation
+run `6e27c501-a8b6-444c-ad27-4765603f4fe7` completed at
+`2026-07-22T02:39:46.448Z`, checked one active provider invoice, and persisted
+zero issues. The verifier made no provider request. Private evidence remains
+outside Git at:
+
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-openai-usage-import-2026-07-22.json`
+- `/Users/hoeenjoe/Documents/AidoForMe-private/phase2-reconciliation-after-provider-import-2026-07-22.json`
+
+The Phase 2 provider invoice/export gate is complete. Before public launch,
+test a consented, de-identified set spanning subjects and rubric formats
+against the retained 95% critical-recall and anchor-accuracy targets. This is
+not a reason to repeat-tune the current corruption rubric during Phase 2
+staging.
+
+## Real staging gateway result
+
+The approved, funded staging gateway call is complete. Response
+`resp_07cf317ffb241b61016a5fdd5ee49081988b8fd78f97b2b5f4` used the fixed
+`gpt-5.4-mini-2026-03-17` route with no tools/search, one request, no retry,
+and no fallback. It recorded 103 ordinary input tokens, zero cache-read/write
+tokens, 56 output tokens, 2,007 ms latency, valid structured output, and a
+database-recomputed provider cost of 330 microusd.
+
+The same immutable flow recorded reservation, authorization, one-way dispatch,
+provider usage, settlement, and release. It captured 263 credits and released
+95 unused reserved credits, moving the funded wallet from 2,000 to 1,737 with
+no negative balance. The earlier insufficient-credit attempt failed with
+PostgreSQL `P0001` before authorization or network dispatch. Private evidence:
+
+`/Users/hoeenjoe/Documents/AidoForMe-private/phase2-gateway-staging-evidence-2026-07-22.json`
+
+The gateway execution and independent provider reconciliation gates are
+complete. The final linked schema/advisor, local database/concurrency,
+billing-boundary, provider-contract, no-demo, lint, typecheck, and build gates
+also passed on 2026-07-22. Phase 2 is exit-gate complete on isolated staging;
+the retained multi-subject quality threshold remains a prelaunch gate rather
+than a reason for another provider request now.
 
 ## Staging quality evaluation result
 
@@ -587,9 +621,38 @@ receipt must name `null`. Prompt
 and mismatched bindings, while preserving v13 atomic-clause and truncation
 guards. A read-only isolated-staging dry run found the same 35 anchors, 27
 coverage obligations, five clauses, and one incomplete block and made no
-provider request. V14 has no approved checklist hash in code; another paid
-request is impossible until a new version-bound checklist is reviewed and the
-owner gives separate explicit approval.
+provider request. The owner reviewed v14 checklist SHA-256
+`958c91b347b16456f9cdf8f158b1822e3e2cad910afbe771ad3792be5d0668a5`
+and approved exactly one mini request with no retry, no fallback, and a USD
+0.048 maximum. The first execution attempt stopped before network dispatch
+because the strict-schema cost envelope was USD 0.049203. Reducing only the
+maximum output allowance from 4,000 to 3,700 tokens produced a USD 0.047853
+envelope; the prompt, schema, documents, model, retry policy, and fallback
+policy were unchanged.
+
+The single authorized request completed as
+`resp_07564adb0d24326c016a5fd4626c90819b82de380e473cef8a` in 14,051 ms. It
+used 8,459 input and 2,693 output tokens, with no cache-read or cache-write
+tokens, for an estimated USD 0.018463. The raw response is retained privately.
+A deterministic offline sanitizer removed four unsupported optional
+command/deliverable/constraint labels; it did not change requirement text,
+anchors, source receipts, or the raw model output. Revalidation then passed
+every automatic guard without another provider request.
+
+The locked 17-item semantic review still failed. All returned requirement
+anchors were supported, but critical recall was 70.6% (12 of 17). The response
+classified all four explicit learning-outcome blocks as context-only, omitted
+the unresolved preventive-measures criterion as a requirement, and did not
+report the case-study-versus-reflective-report conflict.
+
+The owner subsequently clarified that this one developer-owned, subject-
+specific rubric is staging evidence rather than a universal-perfection gate.
+Because every retained requirement row is source-grounded and students must
+confirm/edit the matrix in Phase 3, mini is accepted for isolated staging only.
+The recorded omissions remain real limitations, not hidden successes. The 95%
+recall target moves to the consented, de-identified, multi-subject evaluation
+set required before public launch. The one-request approval was consumed and
+paid evaluation is code-locked again; there was no retry or fallback.
 
 The evaluator fails closed unless the private checklist also contains an
 explicit `provider_request_approval` section for the exact staging project,
@@ -603,8 +666,6 @@ writes can raise that exposure to USD 0.074. Distinct cache-write price and
 usage fields are now implemented, locally verified, and deployed to isolated
 staging; the quote/gateway reserves against the most expensive input class and
 the database recomputes actual cost. This closes the accounting defect but does
-not make the current Luna route approvable: its reviewed hard limits still
-exceed the existing route ceiling under cache-write pricing. The provider
-quality gate must pass and the route ceiling, limits, and margin must be
-reviewed together before configuration is applied. All model controls remain
-disabled and unapplied.
+not make Luna approvable: its reviewed hard limits still exceed the existing
+route ceiling under cache-write pricing. Luna remains disabled. The accepted
+mini route and its required controls are applied only to isolated staging.
